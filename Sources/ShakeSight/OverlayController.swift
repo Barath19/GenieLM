@@ -20,6 +20,7 @@ final class BubbleModel: ObservableObject {
 
     var onSubmit: ((String) -> Void)?
     var onClose: (() -> Void)?
+    var onContentSize: ((CGSize) -> Void)?
 
     func submit() {
         let t = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -28,35 +29,52 @@ final class BubbleModel: ObservableObject {
     }
 }
 
-/// A slim chat-input pill attached to the cursor. The answer card only appears
-/// below the pill once there's a reply; otherwise the rest stays invisible.
-/// Bounce is a one-liner via SwiftUI's `.bouncy` spring (interruptible).
+/// 8-bit / CRT-terminal palette + font.
+enum Retro {
+    static let bg = Color(red: 0.04, green: 0.05, blue: 0.09)
+    static let neon = Color(red: 0.23, green: 1.0, blue: 0.34)
+    static let dim = Color(red: 0.23, green: 1.0, blue: 0.34).opacity(0.45)
+    /// Bundled arcade pixel font; falls back to monospaced if unregistered.
+    static func font(_ size: CGFloat) -> Font {
+        .custom("Press Start 2P", size: size)
+    }
+}
+
+/// A slim chat-input box attached to the cursor, 8-bit themed. The answer panel
+/// only appears below once there's a reply. Bounce via SwiftUI's `.bouncy` spring.
 struct ChatBubbleView: View {
     @ObservedObject var model: BubbleModel
     @FocusState private var focused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // The input pill — the entire UI when there's no answer yet.
-            TextField(model.inputEnabled ? "Ask about your screen…" : model.title,
-                      text: $model.inputText)
-                .textFieldStyle(.plain)
-                .font(.system(size: 13))
-                .padding(.horizontal, 14)
-                .padding(.vertical, 9)
-                .background(.regularMaterial, in: Capsule())
-                .overlay(Capsule().strokeBorder(Color.primary.opacity(0.08)))
-                .shadow(color: .black.opacity(0.18), radius: 8, y: 2)
-                .focused($focused)
-                .disabled(!model.inputEnabled)
-                .onSubmit { model.submit() }
+            // The input box — the entire UI when there's no answer yet.
+            HStack(spacing: 6) {
+                Text(">").foregroundColor(Retro.neon)
+                TextField("", text: $model.inputText,
+                          prompt: Text(model.inputEnabled ? "ASK ABOUT YOUR SCREEN" : model.title.uppercased())
+                            .foregroundColor(Retro.dim))
+                    .textFieldStyle(.plain)
+                    .foregroundColor(Retro.neon)
+                    .focused($focused)
+                    .disabled(!model.inputEnabled)
+                    .onSubmit { model.submit() }
+            }
+            .font(Retro.font(9))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 9)
+            .background(Retro.bg)
+            .overlay(Rectangle().strokeBorder(Retro.neon, lineWidth: 2))
+            .shadow(color: Retro.neon.opacity(0.18), radius: 0, x: 2, y: 2)
 
-            // Answer card — appears only after a reply, expands downward.
+            // Answer panel — appears only after a reply, expands downward.
             if !model.transcript.isEmpty {
                 ScrollViewReader { proxy in
                     ScrollView {
                         Text(model.transcript)
-                            .font(.system(size: 13))
+                            .font(Retro.font(8))
+                            .foregroundColor(Retro.neon)
+                            .lineSpacing(5)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .textSelection(.enabled)
                         Color.clear.frame(height: 1).id("bottom")
@@ -66,15 +84,23 @@ struct ChatBubbleView: View {
                         withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
                     }
                 }
-                .padding(12)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
-                .shadow(color: .black.opacity(0.18), radius: 10, y: 3)
+                .padding(10)
+                .background(Retro.bg)
+                .overlay(Rectangle().strokeBorder(Retro.neon, lineWidth: 2))
+                .shadow(color: Retro.neon.opacity(0.18), radius: 0, x: 2, y: 2)
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
         .frame(width: 340, alignment: .leading)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(8)
+        .background(
+            // Report the natural (unscaled) content size so the window can fit it.
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear { model.onContentSize?(geo.size) }
+                    .onChange(of: geo.size) { _, s in model.onContentSize?(s) }
+            }
+        )
         .scaleEffect(model.shown ? 1 : 0.6, anchor: .top)
         .opacity(model.shown ? 1 : 0)
         .animation(.bouncy(duration: 0.4, extraBounce: 0.35), value: model.shown)
@@ -140,8 +166,9 @@ final class OverlayController: NSObject {
 
         model.onSubmit = { [weak self] text in self?.onSubmit?(text) }
         model.onClose = { [weak self] in self?.onClose?() }
+        model.onContentSize = { [weak self] size in self?.resize(to: size) }
 
-        let size = NSSize(width: 360, height: 360)
+        let size = NSSize(width: 356, height: 72)   // initial; resized to fit content
         let p = KeyablePanel(
             contentRect: NSRect(origin: .zero, size: size),
             styleMask: [.borderless, .nonactivatingPanel],
@@ -163,6 +190,19 @@ final class OverlayController: NSObject {
         p.contentView = host
 
         self.panel = p
+    }
+
+    /// Resize the panel to fit the SwiftUI content, then re-anchor to the cursor.
+    private func resize(to size: CGSize) {
+        guard let panel else { return }
+        let new = NSSize(width: ceil(size.width), height: ceil(size.height))
+        guard new.width > 1, new.height > 1, panel.frame.size != new else {
+            glueToPointer(); return
+        }
+        var frame = panel.frame
+        frame.size = new
+        panel.setFrame(frame, display: true)
+        glueToPointer()
     }
 
     // MARK: - Cursor follow (always attached to the pointer)

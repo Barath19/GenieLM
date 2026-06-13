@@ -1,4 +1,13 @@
 import AppKit
+import CoreText
+
+/// Register the bundled pixel font so SwiftUI's Font.custom can find it.
+func registerBundledFonts() {
+    if let url = Bundle.main.url(forResource: "PressStart2P-Regular", withExtension: "ttf", subdirectory: "Fonts")
+        ?? Bundle.main.url(forResource: "PressStart2P-Regular", withExtension: "ttf") {
+        CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
+    }
+}
 
 let systemPrompt = """
 You are a desktop assistant looking at a screenshot of the user's screen. \
@@ -22,6 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var transcript = ""
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        registerBundledFonts()
         setupStatusItem()
         detector.onShake = { [weak self] in self?.toggleSession() }
         overlay.onSubmit = { [weak self] question in self?.ask(question) }
@@ -65,7 +75,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         transcript = ""
         pendingImageB64 = nil
         overlay.clearInput()
-        overlay.present(hint: "Capturing screen…")
+        overlay.present(hint: "Capturing...")
         overlay.setInputEnabled(false)
 
         Task { @MainActor in
@@ -74,12 +84,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 let png = try await ScreenCapture.capture(globalRect: nil)
                 guard sessionActive else { return }   // closed mid-capture
                 pendingImageB64 = png.base64EncodedString()
-                overlay.setStatus("👁 ShakeSight")
+                overlay.setStatus("SHAKESIGHT")
                 overlay.setInputEnabled(true)   // just the pill until they ask
             } catch {
                 guard sessionActive else { return }
-                overlay.render(transcript: "⚠️ \(error.localizedDescription)")
-                overlay.setStatus("⚠️ Error")
+                overlay.render(transcript: "ERR: \(error.localizedDescription)")
+                overlay.setStatus("ERROR")
             }
         }
     }
@@ -93,9 +103,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // The first question clears the "Screen captured" hint.
         if history.isEmpty { transcript = "" }
-        transcript += transcript.isEmpty ? "🧑  \(question)" : "\n\n🧑  \(question)"
+        transcript += transcript.isEmpty ? "> \(question)" : "\n\n> \(question)"
         overlay.render(transcript: transcript)
-        overlay.setStatus("🤔 Thinking…")
+        overlay.setStatus("THINKING...")
 
         // Build the next user turn, attaching the image on the first turn only.
         if history.isEmpty {
@@ -111,14 +121,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 let answer = try await ollama.chat(messages: history)
                 guard sessionActive else { return }   // closed mid-request
                 history.append(OllamaClient.ChatMessage(role: "assistant", content: answer, images: nil))
-                transcript += "\n\n👁  \(answer)"
+                transcript += "\n\n\(answer)"
                 overlay.render(transcript: transcript)
-                overlay.setStatus("👁 ShakeSight")
+                overlay.setStatus("SHAKESIGHT")
             } catch {
                 guard sessionActive else { return }
-                transcript += "\n\n⚠️  \(error.localizedDescription)"
+                transcript += "\n\nERR: \(error.localizedDescription)"
                 overlay.render(transcript: transcript)
-                overlay.setStatus("⚠️ Error")
+                overlay.setStatus("ERROR")
             }
             overlay.setInputEnabled(true)
         }

@@ -14,8 +14,9 @@ BIN_PATH="$(swift build -c release --show-bin-path)/$BIN_NAME"
 
 echo "Assembling $APP..."
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/Fonts"
 cp "$BIN_PATH" "$APP/Contents/MacOS/$BIN_NAME"
+cp Resources/PressStart2P-Regular.ttf "$APP/Contents/Resources/Fonts/"
 
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -38,6 +39,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
     <string>14.0</string>
     <key>LSUIElement</key>
     <true/>
+    <key>ATSApplicationFontsPath</key>
+    <string>Fonts</string>
     <key>NSScreenCaptureUsageDescription</key>
     <string>ShakeSight captures your screen to analyze it when you shake the mouse.</string>
 </dict>
