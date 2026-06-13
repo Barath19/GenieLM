@@ -1,18 +1,34 @@
 # ShakeSight 👁
 
-Shake your mouse anywhere on macOS → it screenshots your screen, asks a **local
-Gemma vision model** what you're looking at, and floats the answer next to your
-cursor. No cloud, no API keys, runs fully on-device.
+A native macOS menu-bar agent that lets a **local Gemma vision model** see your
+screen. Shake your mouse (or ⌘-drag a region) and a retro 8-bit chat bubble
+floats next to your cursor so you can ask about whatever's on screen. No cloud,
+no API keys - runs fully on-device via Ollama.
 
 Hackathon project (Pioneer / Fastino Labs). Built native in Swift.
 
-## Milestones
+## What it does
 
-- [x] **M1 — Shake → screenshot → Gemma → floating answer** (this build)
-- [ ] M2 — Ask follow-up questions about the same screenshot (multi-turn)
-- [ ] M3 — Drag-select a region; auto-detect error / code / form context
-- [ ] M4 — **Take actions on screen** (Accessibility API: click & type, with approval)
-- [ ] M5 — Agentic plan→act→observe loop; swap Ollama for native MLX-VLM
+- **Shake to chat** - shake the mouse → it screenshots the whole screen and a
+  chat bubble pops up at your cursor. Ask anything; follow-ups keep context.
+- **⌘ + drag to snip** - hold ⌘ and drag a rectangle anywhere → that region is
+  captured, shown as a thumbnail in the chat, and sent to the model.
+- **Ghost cursor** - type `tic tac toe` in the chat to play tic-tac-toe against
+  a "ghost" pointer: you draw your X, Gemma *looks at the board* and the ghost
+  hand-draws its O. (Menu also has a standalone trailing ghost cursor.)
+- **8-bit theme** - neon-green CRT styling, the bundled *Press Start 2P* arcade
+  font, and synthesized chiptune blips on every action.
+
+## Controls
+
+| Action | Trigger |
+|--------|---------|
+| Open chat (full screen) | **Shake** the mouse, or menu → *Open chat now* |
+| Snip a region | **Hold ⌘ and drag** a rectangle, then release |
+| Ask / follow up | Type in the `>` field, press **Return** |
+| Play tic-tac-toe | Type `tic tac toe` in the chat |
+| Toggle ghost cursor | Menu → *Toggle ghost cursor* (⌘G) |
+| Close | **Shake** again, or **Esc** |
 
 ## Requirements
 
@@ -31,16 +47,15 @@ Hackathon project (Pioneer / Fastino Labs). Built native in Swift.
 open ShakeSight.app
 ```
 
-A 👁 icon appears in the menu bar. **Shake the mouse** (several quick
-left-right wiggles) anywhere, or use the menu's *Analyze screen now*.
+A 👁 icon appears in the menu bar.
 
 ### First-run permissions
 
-macOS will prompt for **Screen Recording** the first time it captures
+macOS prompts for **Screen Recording** the first time it captures
 (System Settings → Privacy & Security → Screen Recording → enable ShakeSight,
-then relaunch). Mouse-move observation needs no special permission.
+then relaunch). Mouse observation needs no special permission.
 
-For logs during a demo, run the binary directly instead of `open`:
+For live logs during a demo, run the binary directly instead of `open`:
 ```bash
 ./ShakeSight.app/Contents/MacOS/ShakeSight
 ```
@@ -49,13 +64,20 @@ For logs during a demo, run the binary directly instead of `open`:
 
 | Piece | File | Notes |
 |-------|------|-------|
-| Shake gesture | `ShakeDetector.swift` | Global `NSEvent` monitor; counts rapid horizontal direction reversals within 0.6s |
-| Screen grab | `ScreenCapture.swift` | ScreenCaptureKit `SCScreenshotManager`, display under the cursor |
-| Vision model | `OllamaClient.swift` | POSTs base64 PNG to `127.0.0.1:11434/api/generate` |
-| Overlay UI | `OverlayController.swift` | Floating non-activating `NSPanel` near the cursor |
-| Wiring | `main.swift` | Menu-bar agent (`LSUIElement`), status item, shake → capture → analyze |
+| Shake gesture | `ShakeDetector.swift` | Global `NSEvent` monitor; rapid horizontal direction reversals (ignored while ⌘ is held) |
+| ⌘-drag snip | `CmdDragSnipper.swift` | Passive global mouse monitors + a click-through overlay that draws the selection box |
+| Screen grab | `ScreenCapture.swift` | ScreenCaptureKit full-display capture, then crops per-`NSScreen` (multi-monitor safe) |
+| Vision model | `OllamaClient.swift` | POSTs base64 PNG to `127.0.0.1:11434/api/chat`, multi-turn |
+| Chat bubble | `OverlayController.swift` | SwiftUI in a non-activating `NSPanel`; follows the cursor, bouncy spring, sizes to content |
+| Ghost cursor | `GhostCursor.swift` | Click-through neon arrow that follows / glides / traces strokes |
+| Tic-tac-toe | `DrawGame.swift` | Freehand board; Gemma reads a screenshot and returns the move as `x,y` coords |
+| Sound | `RetroSound.swift` | Square-wave chiptune blips synthesized in memory |
+| Wiring | `main.swift` | Menu-bar agent (`LSUIElement`), triggers, capture → chat |
 
-## Tuning the shake
+## Tuning
 
-In `ShakeDetector.swift`: `reversalsToTrigger`, `windowSeconds`, `minSpeed`,
-`cooldown`. Lower the reversal count if it feels too hard to trigger.
+- **Shake sensitivity** - `ShakeDetector.swift`: `reversalsToTrigger`,
+  `windowSeconds`, `minSpeed`, `cooldown`.
+- **Board image** - drop any grid image at `Resources/board.png` (it's recolored
+  to neon on load) and rebuild.
+- **Model** - change `model` in `OllamaClient.swift` to any Ollama vision model.
