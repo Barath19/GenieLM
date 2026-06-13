@@ -20,6 +20,7 @@ may not exist.
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let detector = ShakeDetector()
     private let overlay = OverlayController()
+    private let ghost = GhostCursor()
     private let ollama = OllamaClient()
     private var statusItem: NSStatusItem?
     private var busy = false
@@ -47,6 +48,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func closeSession() {
         sessionActive = false   // invalidates any in-flight completion
         busy = false
+        ghost.hide()            // dismiss the ghost cursor with the chat
         RetroSound.close()
         overlay.hide()
     }
@@ -56,6 +58,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         item.button?.title = "👁"
         let menu = NSMenu()
         menu.addItem(NSMenuItem(title: "Open chat now", action: #selector(openMenu), keyEquivalent: "a"))
+        menu.addItem(NSMenuItem(title: "Toggle ghost cursor", action: #selector(toggleGhost), keyEquivalent: "g"))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit ShakeSight", action: #selector(quit), keyEquivalent: "q"))
         menu.items.forEach { $0.target = self }
@@ -64,6 +67,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openMenu() { startNewSession() }
+    @objc private func toggleGhost() { ghost.toggle(); RetroSound.submit() }
     @objc private func quit() { NSApp.terminate(nil) }
 
     /// Shake (or menu): capture the screen silently and open the chat at the
@@ -99,6 +103,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// A question. The first one carries the screenshot; later ones reuse context.
     private func ask(_ question: String) {
+        // Easter-egg command: spawn/dismiss the ghost cursor.
+        if question.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "tic tac toe" {
+            ghost.toggle()
+            overlay.clearInput()
+            overlay.setStatus(ghost.visible ? "GHOST ON" : "GHOST OFF")
+            RetroSound.submit()
+            return
+        }
+
         guard !busy else { return }
         busy = true
         overlay.clearInput()
