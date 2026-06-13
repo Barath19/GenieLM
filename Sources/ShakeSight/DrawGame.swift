@@ -1,7 +1,26 @@
 import AppKit
+import CoreImage
 
 private let neonColor = NSColor(srgbRed: 0.23, green: 1.0, blue: 0.34, alpha: 1.0)
 private let bgColor = NSColor(srgbRed: 0.04, green: 0.05, blue: 0.09, alpha: 1.0)
+
+/// Load the swappable board image and recolor it: white background → transparent,
+/// dark lines → neon. Works for any grid image dropped in as Resources/board.png.
+private let boardImage: NSImage? = {
+    guard let url = Bundle.main.url(forResource: "board", withExtension: "png"),
+          let ci = CIImage(contentsOf: url) else { return nil }
+    let mask = ci.applyingFilter("CIColorInvert").applyingFilter("CIMaskToAlpha")
+    let rep = NSCIImageRep(ciImage: mask)
+    let masked = NSImage(size: rep.size); masked.addRepresentation(rep)
+
+    let out = NSImage(size: rep.size)
+    out.lockFocus()
+    masked.draw(at: .zero, from: NSRect(origin: .zero, size: rep.size), operation: .sourceOver, fraction: 1)
+    neonColor.set()
+    NSRect(origin: .zero, size: rep.size).fill(using: .sourceAtop)
+    out.unlockFocus()
+    return out
+}()
 
 /// Freehand tic-tac-toe canvas. You ink your X with the mouse and press Space;
 /// the ghost (Gemma) reads the drawing and inks an O.
@@ -74,15 +93,19 @@ final class DrawCanvasView: NSView {
         bgColor.setFill(); bounds.fill()
 
         let b = boardRect()
-        neonColor.setStroke()
-        let grid = NSBezierPath(); grid.lineWidth = 2
-        for i in 1...2 {
-            let x = b.minX + CGFloat(i) * b.width / 3
-            grid.move(to: NSPoint(x: x, y: b.minY)); grid.line(to: NSPoint(x: x, y: b.maxY))
-            let y = b.minY + CGFloat(i) * b.height / 3
-            grid.move(to: NSPoint(x: b.minX, y: y)); grid.line(to: NSPoint(x: b.maxX, y: y))
+        if let img = boardImage {
+            img.draw(in: b)
+        } else {
+            neonColor.setStroke()
+            let grid = NSBezierPath(); grid.lineWidth = 2
+            for i in 1...2 {
+                let x = b.minX + CGFloat(i) * b.width / 3
+                grid.move(to: NSPoint(x: x, y: b.minY)); grid.line(to: NSPoint(x: x, y: b.maxY))
+                let y = b.minY + CGFloat(i) * b.height / 3
+                grid.move(to: NSPoint(x: b.minX, y: y)); grid.line(to: NSPoint(x: b.maxX, y: y))
+            }
+            grid.stroke()
         }
-        grid.stroke()
 
         // Ink (committed + in progress).
         neonColor.setStroke()
@@ -316,17 +339,37 @@ final class DrawGameController: NSObject {
         try? await Task.sleep(nanoseconds: 150_000_000)
         guard let png = try? await ScreenCapture.capture(globalRect: panel.frame) else { return nil }
         let prompt = """
-        This is a hand-drawn tic-tac-toe board. Cells are numbered 0-8: \
-        top row 0 1 2, middle row 3 4 5, bottom row 6 7 8. \
-        You play as O against the hand-drawn X marks. Reply with ONLY the single \
-        digit (0-8) of the best EMPTY cell for O. Just the number.
+        This is a hand-drawn tic-tac-toe board with X marks. You play O. \
+        Pick the best EMPTY square and reply with its CENTER as two numbers \
+        x,y — each a fraction from 0 to 1, where x goes left→right and \
+        y goes top→bottom. Reply with ONLY "x,y" (e.g. 0.5,0.5). No other text.
         """
         let msg = OllamaClient.ChatMessage(role: "user", content: prompt, images: [png.base64EncodedString()])
-        guard let reply = try? await ollama.chat(messages: [msg]) else { return nil }
-        for ch in reply where ch.isNumber {
-            if let d = ch.wholeNumberValue, (0...8).contains(d),
-               !canvas.xCells.contains(d), !canvas.oCells.contains(d) { return d }
+        guard let reply = try? await ollama.chat(messages: [msg]) else {
+            print("[ghost] no reply from Gemma"); return nil
         }
+        let W = Double(panel.frame.width), H = Double(panel.frame.height)
+        print("[ghost] X cells=\(canvas.xCells.sorted()) O cells=\(canvas.oCells.sorted())")
+        print("[ghost] gemma raw reply: \(reply.replacingOccurrences(of: "\n", with: " "))")
+
+        let nums = reply.components(separatedBy: CharacterSet(charactersIn: "0123456789.").inverted)
+            .compactMap { Double($0) }
+
+        if nums.count >= 2 {
+            var x = nums[0], y = nums[1]
+            if x > 1.5 { x /= W }; if y > 1.5 { y /= H }   // tolerate pixel coords
+            let col = min(2, max(0, Int(x * 3)))
+            let row = min(2, max(0, Int(y * 3)))
+            let cell = row * 3 + col
+            print("[ghost] coords x=\(String(format: "%.2f", x)) y=\(String(format: "%.2f", y)) → cell \(cell)")
+            if !canvas.xCells.contains(cell), !canvas.oCells.contains(cell) { return cell }
+            print("[ghost] coord cell occupied → fallback")
+        } else if let d = nums.first.flatMap({ Int($0) }), (0...8).contains(d),
+                  !canvas.xCells.contains(d), !canvas.oCells.contains(d) {
+            print("[ghost] single index \(d)")
+            return d
+        }
+        print("[ghost] no legal move parsed → minimax fallback")
         return nil
     }
 
