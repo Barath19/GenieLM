@@ -38,6 +38,9 @@ final class ShakeDetector {
     private func now() -> TimeInterval { ProcessInfo.processInfo.systemUptime }
 
     private func handle(_ event: NSEvent) {
+        // Ignore motion while ⌘ is held — that's the snip gesture, not a shake.
+        if event.modifierFlags.contains(.command) { lastPoint = nil; return }
+
         let p = NSEvent.mouseLocation
         defer { lastPoint = p }
         guard let last = lastPoint else { return }

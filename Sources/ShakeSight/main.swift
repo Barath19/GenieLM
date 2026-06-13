@@ -21,6 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let detector = ShakeDetector()
     private let overlay = OverlayController()
     private let ghost = GhostCursor()
+    private let snipper = CmdDragSnipper()
     private lazy var game = DrawGameController(ghost: ghost)
     private let ollama = OllamaClient()
     private var statusItem: NSStatusItem?
@@ -38,7 +39,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         detector.onShake = { [weak self] in self?.toggleSession() }
         overlay.onSubmit = { [weak self] question in self?.ask(question) }
         overlay.onClose = { [weak self] in self?.closeSession() }
+        snipper.onSnip = { [weak self] rect in self?.startNewSession(region: rect) }
         detector.start()
+        snipper.start()
     }
 
     /// Shake toggles the chat (or closes the game if it's running).
@@ -60,6 +63,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         item.button?.title = "👁"
         let menu = NSMenu()
         menu.addItem(NSMenuItem(title: "Open chat now", action: #selector(openMenu), keyEquivalent: "a"))
+        menu.addItem(NSMenuItem(title: "Snip: hold ⌘ + drag", action: nil, keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Toggle ghost cursor", action: #selector(toggleGhost), keyEquivalent: "g"))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit ShakeSight", action: #selector(quit), keyEquivalent: "q"))
@@ -74,7 +78,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Shake (or menu): capture the screen silently and open the chat at the
     /// pointer. No model call yet — we wait for the user's question.
-    private func startNewSession() {
+    private func startNewSession(region: CGRect? = nil) {
         guard !busy else { return }
         busy = true
         sessionActive = true
@@ -82,16 +86,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         transcript = ""
         pendingImageB64 = nil
         overlay.clearInput()
-        overlay.present(hint: "Capturing...")
+        overlay.present(hint: region == nil ? "Capturing..." : "Reading snip...")
         overlay.setInputEnabled(false)
         RetroSound.open()
 
         Task { @MainActor in
             defer { busy = false }
             do {
-                let png = try await ScreenCapture.capture(globalRect: nil)
+                let png = try await ScreenCapture.capture(globalRect: region)
                 guard sessionActive else { return }   // closed mid-capture
+                let img = NSImage(data: png)
+                print("[snip] region=\(String(describing: region)) png=\(png.count)B image=\(img != nil) size=\(img?.size ?? .zero)")
                 pendingImageB64 = png.base64EncodedString()
+                overlay.setImage(region == nil ? nil : img)   // only show the snip, not full screen
                 overlay.setStatus("SHAKESIGHT")
                 overlay.setInputEnabled(true)   // just the pill until they ask
             } catch {
@@ -136,11 +143,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             history.append(OllamaClient.ChatMessage(role: "user", content: question, images: nil))
         }
 
+        print("[chat] asking: \(question) (history=\(history.count))")
         Task { @MainActor in
             defer { busy = false }
             do {
                 let answer = try await ollama.chat(messages: history)
                 guard sessionActive else { return }   // closed mid-request
+                print("[chat] answer: \(answer.prefix(120))")
                 history.append(OllamaClient.ChatMessage(role: "assistant", content: answer, images: nil))
                 transcript += "\n\n\(answer)"
                 overlay.render(transcript: transcript)
@@ -148,6 +157,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 RetroSound.answer()
             } catch {
                 guard sessionActive else { return }
+                print("[chat] error: \(error.localizedDescription)")
                 transcript += "\n\nERR: \(error.localizedDescription)"
                 overlay.render(transcript: transcript)
                 overlay.setStatus("ERROR")
@@ -157,6 +167,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 }
+
+setvbuf(stdout, nil, _IONBF, 0)   // unbuffered logs when stdout is a file
 
 let app = NSApplication.shared
 app.setActivationPolicy(.accessory)   // menu-bar agent, no dock icon

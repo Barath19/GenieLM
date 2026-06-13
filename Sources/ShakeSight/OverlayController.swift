@@ -17,10 +17,10 @@ final class BubbleModel: ObservableObject {
     @Published var inputEnabled = false
     @Published var shown = false
     @Published var focusTick = 0   // bump to (re)request keyboard focus
+    @Published var image: NSImage?   // captured snip shown atop the chat
 
     var onSubmit: ((String) -> Void)?
     var onClose: (() -> Void)?
-    var onContentSize: ((CGSize) -> Void)?
 
     func submit() {
         let t = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -48,6 +48,17 @@ struct ChatBubbleView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
+            // The captured snip, shown on top.
+            if let img = model.image {
+                let w: CGFloat = 340
+                let h = min(w * img.size.height / max(img.size.width, 1), 260)
+                Image(nsImage: img)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: w, height: h)
+                    .transition(.opacity)
+            }
+
             // The input box — the entire UI when there's no answer yet.
             HStack(spacing: 6) {
                 Text(">").foregroundColor(Retro.neon)
@@ -93,18 +104,12 @@ struct ChatBubbleView: View {
         }
         .frame(width: 340, alignment: .leading)
         .padding(8)
-        .background(
-            // Report the natural (unscaled) content size so the window can fit it.
-            GeometryReader { geo in
-                Color.clear
-                    .onAppear { model.onContentSize?(geo.size) }
-                    .onChange(of: geo.size) { _, s in model.onContentSize?(s) }
-            }
-        )
+        .fixedSize(horizontal: false, vertical: true)
         .scaleEffect(model.shown ? 1 : 0.6, anchor: .top)
         .opacity(model.shown ? 1 : 0)
         .animation(.bouncy(duration: 0.4, extraBounce: 0.35), value: model.shown)
         .animation(.bouncy(duration: 0.4, extraBounce: 0.2), value: model.transcript.isEmpty)
+        .animation(.bouncy(duration: 0.4, extraBounce: 0.2), value: model.image != nil)
         .onChange(of: model.inputEnabled) { _, enabled in focused = enabled }
         .onChange(of: model.focusTick) { _, _ in if model.inputEnabled { focused = true } }
         .onExitCommand { model.onClose?() }
@@ -129,17 +134,41 @@ final class OverlayController: NSObject {
         ensurePanel()
         model.title = hint          // shown as the pill placeholder while disabled
         model.transcript = ""       // no answer card until there's a reply
+        model.image = nil
         model.shown = false
         panel?.makeKeyAndOrderFront(nil)
         startFollowing()
-        glueToPointer()
+        forceRender()
         // Flip on next runloop so the spring animates from the collapsed state.
         DispatchQueue.main.async { [weak self] in self?.model.shown = true }
     }
 
-    func setStatus(_ status: String) { model.title = status }
-    func render(transcript: String) { model.transcript = transcript }
+    func setStatus(_ status: String) { model.title = status; forceRender() }
+    func render(transcript: String) { model.transcript = transcript; forceRender() }
+    func setImage(_ image: NSImage?) {
+        model.image = image
+        forceRender()
+    }
     func clearInput() { model.inputText = "" }
+
+    /// Resize the window to fit the SwiftUI content and re-anchor to the cursor.
+    /// The app is a background agent, so we flush layout immediately rather than
+    /// waiting for the next event.
+    private func forceRender() {
+        guard let panel, let host = panel.contentView else { return }
+        host.needsLayout = true
+        host.layoutSubtreeIfNeeded()
+        let fit = host.fittingSize
+        if fit.width > 1, fit.height > 1 {
+            let new = NSSize(width: ceil(fit.width), height: ceil(fit.height))
+            if panel.frame.size != new {
+                var f = panel.frame; f.size = new
+                panel.setFrame(f, display: true)
+            }
+        }
+        glueToPointer()
+        panel.displayIfNeeded()
+    }
 
     func setInputEnabled(_ enabled: Bool) {
         model.inputEnabled = enabled
@@ -147,6 +176,7 @@ final class OverlayController: NSObject {
             panel?.makeKeyAndOrderFront(nil)
             model.focusTick += 1
         }
+        forceRender()
     }
 
     func hide() {
@@ -166,7 +196,6 @@ final class OverlayController: NSObject {
 
         model.onSubmit = { [weak self] text in self?.onSubmit?(text) }
         model.onClose = { [weak self] in self?.onClose?() }
-        model.onContentSize = { [weak self] size in self?.resize(to: size) }
 
         let size = NSSize(width: 356, height: 72)   // initial; resized to fit content
         let p = KeyablePanel(
@@ -185,24 +214,11 @@ final class OverlayController: NSObject {
         p.onEscape = { [weak self] in self?.onClose?() }
 
         let host = NSHostingView(rootView: ChatBubbleView(model: model))
+        host.sizingOptions = [.intrinsicContentSize]   // size to SwiftUI content, not the window
         host.frame = NSRect(origin: .zero, size: size)
-        host.autoresizingMask = [.width, .height]
         p.contentView = host
 
         self.panel = p
-    }
-
-    /// Resize the panel to fit the SwiftUI content, then re-anchor to the cursor.
-    private func resize(to size: CGSize) {
-        guard let panel else { return }
-        let new = NSSize(width: ceil(size.width), height: ceil(size.height))
-        guard new.width > 1, new.height > 1, panel.frame.size != new else {
-            glueToPointer(); return
-        }
-        var frame = panel.frame
-        frame.size = new
-        panel.setFrame(frame, display: true)
-        glueToPointer()
     }
 
     // MARK: - Cursor follow (always attached to the pointer)
