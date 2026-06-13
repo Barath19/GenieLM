@@ -47,6 +47,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func closeSession() {
         sessionActive = false   // invalidates any in-flight completion
         busy = false
+        RetroSound.close()
         overlay.hide()
     }
 
@@ -77,6 +78,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         overlay.clearInput()
         overlay.present(hint: "Capturing...")
         overlay.setInputEnabled(false)
+        RetroSound.open()
 
         Task { @MainActor in
             defer { busy = false }
@@ -90,6 +92,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 guard sessionActive else { return }
                 overlay.render(transcript: "ERR: \(error.localizedDescription)")
                 overlay.setStatus("ERROR")
+                RetroSound.error()
             }
         }
     }
@@ -106,6 +109,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         transcript += transcript.isEmpty ? "> \(question)" : "\n\n> \(question)"
         overlay.render(transcript: transcript)
         overlay.setStatus("THINKING...")
+        RetroSound.submit()
 
         // Build the next user turn, attaching the image on the first turn only.
         if history.isEmpty {
@@ -124,11 +128,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 transcript += "\n\n\(answer)"
                 overlay.render(transcript: transcript)
                 overlay.setStatus("SHAKESIGHT")
+                RetroSound.answer()
             } catch {
                 guard sessionActive else { return }
                 transcript += "\n\nERR: \(error.localizedDescription)"
                 overlay.render(transcript: transcript)
                 overlay.setStatus("ERROR")
+                RetroSound.error()
             }
             overlay.setInputEnabled(true)
         }
