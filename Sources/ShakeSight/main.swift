@@ -21,6 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let detector = ShakeDetector()
     private let overlay = OverlayController()
     private let ghost = GhostCursor()
+    private lazy var game = TicTacToeController(ghost: ghost)
     private let ollama = OllamaClient()
     private var statusItem: NSStatusItem?
     private var busy = false
@@ -40,8 +41,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         detector.start()
     }
 
-    /// Shake toggles the chat: open if closed, close if already open.
+    /// Shake toggles the chat (or closes the game if it's running).
     private func toggleSession() {
+        if game.isActive { game.close(); RetroSound.close(); return }
         if sessionActive { closeSession() } else { startNewSession() }
     }
 
@@ -103,12 +105,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// A question. The first one carries the screenshot; later ones reuse context.
     private func ask(_ question: String) {
-        // Easter-egg command: spawn/dismiss the ghost cursor.
+        // Easter-egg command: play tic-tac-toe against the ghost.
         if question.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "tic tac toe" {
-            ghost.toggle()
             overlay.clearInput()
-            overlay.setStatus(ghost.visible ? "GHOST ON" : "GHOST OFF")
-            RetroSound.submit()
+            sessionActive = false
+            busy = false
+            overlay.hide()
+            game.start()
+            RetroSound.open()
             return
         }
 
