@@ -48,6 +48,16 @@ final class GhostCursor {
         glideDone = completion
     }
 
+    /// Jump exactly to a point (no easing) — used to trace a drawing stroke.
+    func snap(to point: NSPoint) {
+        show()
+        followMouse = false
+        glideDone = nil
+        glideTarget = point
+        pos = point
+        place()
+    }
+
     func hide() {
         visible = false
         followMouse = true

@@ -21,7 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let detector = ShakeDetector()
     private let overlay = OverlayController()
     private let ghost = GhostCursor()
-    private lazy var game = TicTacToeController(ghost: ghost)
+    private lazy var game = DrawGameController(ghost: ghost)
     private let ollama = OllamaClient()
     private var statusItem: NSStatusItem?
     private var busy = false
