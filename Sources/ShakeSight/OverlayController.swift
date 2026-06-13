@@ -50,12 +50,16 @@ struct ChatBubbleView: View {
         VStack(alignment: .leading, spacing: 8) {
             // The captured snip, shown on top.
             if let img = model.image {
-                let w: CGFloat = 340
-                let h = min(w * img.size.height / max(img.size.width, 1), 260)
+                // Fit within 340x220 while preserving aspect, so the frame hugs
+                // the image (no transparent bars showing the desktop through).
+                let aspect = img.size.width / max(img.size.height, 1)
+                let w = min(340, 220 * aspect)
+                let h = w / aspect
                 Image(nsImage: img)
                     .resizable()
-                    .scaledToFit()
                     .frame(width: w, height: h)
+                    .shadow(color: .black.opacity(0.45), radius: 5)
+                    .frame(maxWidth: .infinity, alignment: .center)
                     .transition(.opacity)
             }
 
