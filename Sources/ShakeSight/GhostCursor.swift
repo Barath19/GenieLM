@@ -8,6 +8,7 @@ final class GhostCursor {
     private var window: NSWindow?
     private var timer: Timer?
     private var pos: NSPoint = .zero
+    private let offset = CGPoint(x: -60, y: 0)   // ghost sits to the left of the real cursor
 
     func toggle() { visible ? hide() : show() }
 
@@ -15,7 +16,8 @@ final class GhostCursor {
         guard !visible else { return }
         visible = true
         ensureWindow()
-        pos = NSEvent.mouseLocation
+        let m = NSEvent.mouseLocation
+        pos = NSPoint(x: m.x + offset.x, y: m.y + offset.y)
         place()
         window?.orderFrontRegardless()
         timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
@@ -30,7 +32,8 @@ final class GhostCursor {
     }
 
     private func tick() {
-        let target = NSEvent.mouseLocation
+        let m = NSEvent.mouseLocation
+        let target = NSPoint(x: m.x + offset.x, y: m.y + offset.y)
         pos.x += (target.x - pos.x) * 0.16   // easing → trailing ghost
         pos.y += (target.y - pos.y) * 0.16
         place()
