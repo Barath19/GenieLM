@@ -211,7 +211,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func setupStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        item.button?.title = "👁"
+        if let iconURL = Bundle.main.url(forResource: "MenuIcon", withExtension: "png"),
+           let icon = NSImage(contentsOf: iconURL) {
+            icon.isTemplate = true   // adapts to light/dark menu bar
+            let h: CGFloat = 18
+            icon.size = NSSize(width: h * icon.size.width / max(icon.size.height, 1), height: h)
+            item.button?.image = icon
+        } else {
+            item.button?.title = "👁"
+        }
         let menu = NSMenu()
         menu.addItem(NSMenuItem(title: "Open chat now", action: #selector(openMenu), keyEquivalent: "a"))
         menu.addItem(NSMenuItem(title: "Snip: hold ⌘ + drag", action: nil, keyEquivalent: ""))

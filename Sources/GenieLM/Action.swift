@@ -63,17 +63,26 @@ struct PioneerClient {
                       reason: json?["reason"] as? String)
     }
 
-    /// Cloud (Pioneer) first; fall back to the local Gemma when offline,
-    /// unreachable, keyless, or when GENIE_OFFLINE=1 forces on-device.
+    /// Cloud (Pioneer) first. Offline (unreachable / keyless / GENIE_OFFLINE=1)
+    /// → the downloaded fine-tuned model in Ollama (LOCAL_MODEL, default
+    /// "genie-grounder-v4"); base gemma3:4b only as a last resort if it's
+    /// not installed yet.
     private func rawDecision(system: String, user: String) async throws -> String {
         let forceLocal = ProcessInfo.processInfo.environment["GENIE_OFFLINE"] == "1"
         if !forceLocal, let apiKey {
             do { return try await pioneerChat(system: system, user: user, apiKey: apiKey) }
-            catch { print("[agent] Pioneer unreachable → local Gemma fallback") }
+            catch { print("[agent] Pioneer unreachable → local fine-tuned model") }
         }
         let msgs = [OllamaClient.ChatMessage(role: "system", content: system, images: nil),
                     OllamaClient.ChatMessage(role: "user", content: user, images: nil)]
-        return try await OllamaClient().chat(messages: msgs)
+        let localModel = ProcessInfo.processInfo.environment["LOCAL_MODEL"] ?? "genie-grounder-v4"
+        var client = OllamaClient(); client.model = localModel
+        do { return try await client.chat(messages: msgs) }
+        catch {
+            print("[agent] \(localModel) unavailable → base gemma3:4b")
+            var fallback = OllamaClient(); fallback.model = "gemma3:4b"
+            return try await fallback.chat(messages: msgs)
+        }
     }
 
     private func pioneerChat(system: String, user: String, apiKey: String) async throws -> String {

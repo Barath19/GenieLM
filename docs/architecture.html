@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GenieLM — Architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --neon:#3bff57; --neon-dim:#1f7a2e; --bg:#070b11; --panel:#0c121b;
+    --font:"Press Start 2P", ui-monospace, Menlo, monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--neon);font-family:var(--font)}
+  /* CRT scanlines + vignette */
+  body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:9;
+    background:repeating-linear-gradient(rgba(0,0,0,0) 0 2px, rgba(0,0,0,.25) 2px 4px);
+    mix-blend-mode:multiply}
+  body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:9;
+    background:radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.55))}
+  .wrap{max-width:1000px;margin:0 auto;padding:48px 20px 80px}
+  h1{font-size:30px;letter-spacing:2px;text-shadow:0 0 14px var(--neon);margin:0 0 6px}
+  .sub{font-size:9px;line-height:1.9;color:#9bffae;opacity:.8;margin:0 0 4px}
+  .tag{font-size:8px;color:var(--neon-dim);margin-bottom:34px}
+
+  .node{border:2px solid var(--neon);background:var(--panel);padding:14px 16px;
+    box-shadow:4px 4px 0 rgba(59,255,87,.18);font-size:10px;line-height:1.7;text-align:center}
+  .node .t{font-size:11px;text-shadow:0 0 8px var(--neon)}
+  .node .d{font-size:8px;color:#86e896;opacity:.8;margin-top:8px;line-height:1.8}
+  .local{border-color:#39d0ff;color:#aef0ff;box-shadow:4px 4px 0 rgba(57,208,255,.18)}
+  .local .t{text-shadow:0 0 8px #39d0ff}
+  .cloud{border-color:#ffd23b;color:#ffe9a6;box-shadow:4px 4px 0 rgba(255,210,59,.18)}
+  .cloud .t{text-shadow:0 0 8px #ffd23b}
+
+  .arrow{text-align:center;color:var(--neon);font-size:14px;margin:8px 0;text-shadow:0 0 8px var(--neon)}
+  .lbl{font-size:8px;color:#86e896;text-align:center;margin:6px 0 -2px}
+
+  .branch{display:grid;grid-template-columns:1fr 1fr;gap:26px;margin-top:6px}
+  .col{display:flex;flex-direction:column}
+  .col .arrow{margin:6px 0}
+  .branchhead{font-size:9px;text-align:center;margin-bottom:8px;letter-spacing:1px}
+  .q{color:#39d0ff} .a{color:#ffd23b}
+
+  .train{margin-top:34px;border:2px dashed var(--neon-dim);padding:18px;background:#0a0f16}
+  .train h2{font-size:11px;margin:0 0 14px;color:#9bffae;letter-spacing:1px}
+  .flow{display:flex;flex-wrap:wrap;align-items:center;gap:10px;font-size:8px}
+  .pill{border:1px solid var(--neon-dim);padding:8px 10px;background:var(--panel)}
+  .flow .sep{color:var(--neon-dim)}
+
+  .stack{margin-top:34px;display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+  .chip{font-size:8px;border:1px solid var(--neon-dim);padding:7px 9px;color:#86e896;background:var(--panel)}
+  .foot{margin-top:30px;text-align:center;font-size:8px;color:var(--neon-dim);line-height:2}
+  a{color:var(--neon)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>GENIELM <span style="text-shadow:none">👁</span></h1>
+  <p class="sub">A macOS genie that sees your screen and grants on-screen wishes.</p>
+  <p class="tag">VISION RUNS LOCAL · THE ACTION BRAIN IS FINE-TUNED ON PIONEER · THE SCREEN IS GROUNDED AS TEXT</p>
+
+  <!-- trigger -->
+  <div class="node"><div class="t">YOU</div><div class="d">SHAKE &nbsp;·&nbsp; ⌘-DRAG SNIP &nbsp;·&nbsp; TYPE &nbsp;·&nbsp; VOICE (⌘M)</div></div>
+  <div class="arrow">▼</div>
+
+  <!-- router -->
+  <div class="node"><div class="t">GENIELM.APP</div><div class="d">Swift · AppKit + SwiftUI · 8-bit chat bubble<br>AUTO-INTENT ROUTER — question or action?</div></div>
+
+  <!-- branches -->
+  <div class="branch">
+    <div class="col">
+      <div class="branchhead q">◄ QUESTION</div>
+      <div class="node local"><div class="t">ScreenCaptureKit</div><div class="d">screenshot / ⌘-drag region</div></div>
+      <div class="arrow">▼</div>
+      <div class="node local"><div class="t">OLLAMA · gemma3:4b</div><div class="d">LOCAL vision — on-device, offline</div></div>
+      <div class="arrow">▼</div>
+      <div class="node local"><div class="t">CHAT BUBBLE</div><div class="d">answer floats by the cursor</div></div>
+    </div>
+
+    <div class="col">
+      <div class="branchhead a">ACTION ►</div>
+      <div class="node"><div class="t">ACCESSIBILITY TREE → TEXT</div><div class="d">AXUIElement: elements + screen coords</div></div>
+      <div class="arrow">▼</div>
+      <div class="node cloud"><div class="t">PIONEER GROUNDER</div><div class="d">fine-tuned Qwen3-4B (SFT LoRA)<br>offline fallback → local gemma3:4b</div></div>
+      <div class="lbl">{ "action":"click", "id":N }</div>
+      <div class="arrow">▼</div>
+      <div class="node"><div class="t">CGEvent CLICK / TYPE</div><div class="d">the genie cursor acts</div></div>
+      <div class="arrow">▼</div>
+      <div class="node"><div class="t">YOUR APPS</div></div>
+    </div>
+  </div>
+
+  <!-- training loop -->
+  <div class="train">
+    <h2>TRAINING LOOP — PIONEER / FASTINO</h2>
+    <div class="flow">
+      <span class="pill">/generate · synthetic SFT data</span>
+      <span class="sep">▶</span>
+      <span class="pill">SFT LoRA · Qwen3-4B</span>
+      <span class="sep">▶</span>
+      <span class="pill">deployed adapter</span>
+      <span class="sep">▶</span>
+      <span class="pill cloud" style="color:#ffe9a6">grounder</span>
+      <span class="sep">·····</span>
+      <span class="pill">published → HF: Barath/genielm-ui-grounding</span>
+    </div>
+  </div>
+
+  <!-- stack -->
+  <div class="stack">
+    <span class="chip">Swift 6</span><span class="chip">AppKit</span><span class="chip">SwiftUI</span>
+    <span class="chip">ScreenCaptureKit</span><span class="chip">Accessibility API</span><span class="chip">CGEvent</span>
+    <span class="chip">Speech</span><span class="chip">Ollama · Gemma</span><span class="chip">Pioneer · Fastino</span><span class="chip">Qwen3-4B SFT</span>
+  </div>
+
+  <p class="foot">
+    github.com/Barath19/GenieLM &nbsp;·&nbsp; huggingface.co/datasets/Barath/genielm-ui-grounding<br>
+    Pioneer / Fastino Labs hackathon
+  </p>
+</div>
+</body>
+</html>

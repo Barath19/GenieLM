@@ -16,3 +16,6 @@ DerivedData/
 
 # HF dataset upload staging (reproducible via tools/gen_grounding_dataset.py)
 hf_dataset/
+
+# Downloaded model weights (large, fetched from Pioneer)
+models/
