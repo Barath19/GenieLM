@@ -1,0 +1,5 @@
+# Dependencies for the GenieLM helper scripts (tools/).
+# ground_test.py needs certifi (TLS); HF dataset upload needs huggingface_hub.
+# gen_grounding_dataset.py is stdlib-only.
+certifi==2026.5.20
+huggingface_hub==1.17.0
