@@ -30,6 +30,38 @@ Hackathon project (Pioneer / Fastino Labs). Built native in Swift.
 | Toggle ghost cursor | Menu → *Toggle ghost cursor* (⌘G) |
 | Close | **Shake** again, or **Esc** |
 
+## Architecture
+
+The core idea: **vision runs locally (Gemma), the action brain is a model fine-tuned on Pioneer**, and the screen is grounded as **text** (the accessibility tree) rather than pixels.
+
+```mermaid
+flowchart TD
+    U["You: shake · ⌘-drag · type"] --> ROUTE
+
+    subgraph APP["GenieLM.app — Swift · AppKit + SwiftUI"]
+        ROUTE{"auto-intent:<br/>question or action?"}
+        CAP["ScreenCaptureKit<br/>screenshot / region"]
+        AX["Accessibility tree → text<br/>(AXUIElement)"]
+        ACT["CGEvent click / type<br/>(ghost cursor)"]
+        BUBBLE["8-bit chat bubble<br/>(SwiftUI)"]
+    end
+
+    ROUTE -->|question| CAP
+    CAP --> GEMMA["Ollama · gemma3:4b<br/>LOCAL vision"]
+    GEMMA --> BUBBLE
+
+    ROUTE -->|action| AX
+    AX --> PIO["Pioneer API<br/>fine-tuned Qwen3-4B grounder"]
+    PIO -->|"{action, id}"| ACT
+    ACT --> SCREEN["your apps"]
+
+    subgraph TRAIN["Training loop — Pioneer / Fastino"]
+        GEN["/generate<br/>synthetic SFT data"] --> SFT["SFT LoRA<br/>Qwen3-4B"]
+        SFT -->|deployed adapter| PIO
+        GEN -.->|published| HF["HF dataset<br/>Barath/genielm-ui-grounding"]
+    end
+```
+
 ## Requirements
 
 - macOS 14+ (built/tested on macOS 27, Apple Silicon)
