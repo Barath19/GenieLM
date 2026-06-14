@@ -3,3 +3,5 @@
 # gen_grounding_dataset.py is stdlib-only.
 certifi==2026.5.20
 huggingface_hub==1.17.0
+
+h11==0.16.0
