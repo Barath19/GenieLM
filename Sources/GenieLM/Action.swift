@@ -45,7 +45,38 @@ struct PioneerClient {
     }
 
     private func decide(system: String, user: String) async throws -> Choice {
-        guard let apiKey else { throw ClientError.noKey }
+        let content = try await rawDecision(system: system, user: user)
+        print("[agent] raw: \(content.replacingOccurrences(of: "\n", with: " "))")
+
+        guard let s = content.firstIndex(of: "{"), let e = content.lastIndex(of: "}") else {
+            // Some local models reply with a bare digit.
+            if let d = content.first(where: { $0.isNumber })?.wholeNumberValue, (0...8).contains(d) {
+                return Choice(action: "click", id: d, text: nil, done: false, reason: nil)
+            }
+            return Choice(action: "none", id: nil, text: nil, done: false, reason: nil)
+        }
+        let json = (try? JSONSerialization.jsonObject(with: Data(content[s...e].utf8))) as? [String: Any]
+        return Choice(action: json?["action"] as? String ?? "none",
+                      id: (json?["id"] as? NSNumber)?.intValue,
+                      text: json?["text"] as? String,
+                      done: (json?["done"] as? NSNumber)?.boolValue ?? (json?["action"] as? String == "done"),
+                      reason: json?["reason"] as? String)
+    }
+
+    /// Cloud (Pioneer) first; fall back to the local Gemma when offline,
+    /// unreachable, keyless, or when GENIE_OFFLINE=1 forces on-device.
+    private func rawDecision(system: String, user: String) async throws -> String {
+        let forceLocal = ProcessInfo.processInfo.environment["GENIE_OFFLINE"] == "1"
+        if !forceLocal, let apiKey {
+            do { return try await pioneerChat(system: system, user: user, apiKey: apiKey) }
+            catch { print("[agent] Pioneer unreachable → local Gemma fallback") }
+        }
+        let msgs = [OllamaClient.ChatMessage(role: "system", content: system, images: nil),
+                    OllamaClient.ChatMessage(role: "user", content: user, images: nil)]
+        return try await OllamaClient().chat(messages: msgs)
+    }
+
+    private func pioneerChat(system: String, user: String, apiKey: String) async throws -> String {
         let body: [String: Any] = [
             "model": model, "temperature": 0, "max_tokens": 200,
             "messages": [["role": "system", "content": system], ["role": "user", "content": user]]
@@ -55,25 +86,14 @@ struct PioneerClient {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
-        req.timeoutInterval = 120
+        req.timeoutInterval = 30   // fail fast so offline falls back quickly
 
         let (data, resp) = try await URLSession.shared.data(for: req)
-        guard let http = resp as? HTTPURLResponse else { throw ClientError.bad(0, "no response") }
-        guard http.statusCode == 200 else { throw ClientError.bad(http.statusCode, String(data: data, encoding: .utf8) ?? "") }
-
-        let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        let content = (((obj?["choices"] as? [[String: Any]])?.first?["message"] as? [String: Any])?["content"] as? String) ?? ""
-        print("[agent] raw: \(content.replacingOccurrences(of: "\n", with: " "))")
-
-        guard let s = content.firstIndex(of: "{"), let e = content.lastIndex(of: "}") else {
-            return Choice(action: "none", id: nil, text: nil, done: false, reason: nil)
+        guard let http = resp as? HTTPURLResponse, http.statusCode == 200 else {
+            throw ClientError.bad((resp as? HTTPURLResponse)?.statusCode ?? 0, String(data: data, encoding: .utf8) ?? "")
         }
-        let json = (try? JSONSerialization.jsonObject(with: Data(content[s...e].utf8))) as? [String: Any]
-        return Choice(action: json?["action"] as? String ?? "none",
-                      id: (json?["id"] as? NSNumber)?.intValue,
-                      text: json?["text"] as? String,
-                      done: (json?["done"] as? NSNumber)?.boolValue ?? (json?["action"] as? String == "done"),
-                      reason: json?["reason"] as? String)
+        let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        return (((obj?["choices"] as? [[String: Any]])?.first?["message"] as? [String: Any])?["content"] as? String) ?? ""
     }
 }
 
