@@ -1,11 +1,11 @@
 #!/bin/bash
-# Builds ShakeSight and wraps it into a .app bundle so macOS treats it as a
+# Builds GenieLM and wraps it into a .app bundle so macOS treats it as a
 # proper menu-bar agent and attaches Screen Recording permission to the bundle.
 set -euo pipefail
 cd "$(dirname "$0")"
 
-APP="ShakeSight.app"
-BIN_NAME="ShakeSight"
+APP="GenieLM.app"
+BIN_NAME="GenieLM"
 
 echo "Compiling (release)..."
 swift build -c release
@@ -25,11 +25,11 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <plist version="1.0">
 <dict>
     <key>CFBundleExecutable</key>
-    <string>ShakeSight</string>
+    <string>GenieLM</string>
     <key>CFBundleIdentifier</key>
-    <string>com.barath.shakesight</string>
+    <string>com.barath.genielm</string>
     <key>CFBundleName</key>
-    <string>ShakeSight</string>
+    <string>GenieLM</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
@@ -43,7 +43,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
     <key>ATSApplicationFontsPath</key>
     <string>Fonts</string>
     <key>NSScreenCaptureUsageDescription</key>
-    <string>ShakeSight captures your screen to analyze it when you shake the mouse.</string>
+    <string>GenieLM captures your screen to analyze it when you shake the mouse.</string>
 </dict>
 </plist>
 PLIST
@@ -52,4 +52,4 @@ PLIST
 codesign --force --deep --sign - "$APP" >/dev/null 2>&1 || true
 
 echo "Built $APP"
-echo "Run it with:  open $APP   (or ./$APP/Contents/MacOS/ShakeSight for logs)"
+echo "Run it with:  open $APP   (or ./$APP/Contents/MacOS/GenieLM for logs)"

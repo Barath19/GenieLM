@@ -29,7 +29,7 @@ enum AccessibilityDumper {
         "AXDisclosureTriangle", "AXSlider", "AXSegmentedControl", "AXSearchField"
     ]
 
-    /// Actionable elements of the frontmost (non-ShakeSight) app.
+    /// Actionable elements of the frontmost (non-GenieLM) app.
     static func dumpFrontmost(maxElements: Int = 150) -> (app: String, elements: [UIElement]) {
         guard let app = NSWorkspace.shared.frontmostApplication else { return ("?", []) }
         let axApp = AXUIElementCreateApplication(app.processIdentifier)

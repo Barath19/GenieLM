@@ -1,4 +1,4 @@
-# ShakeSight 👁
+# GenieLM 👁
 
 A native macOS menu-bar agent that lets a **local Gemma vision model** see your
 screen. Shake your mouse (or ⌘-drag a region) and a retro 8-bit chat bubble
@@ -44,7 +44,7 @@ Hackathon project (Pioneer / Fastino Labs). Built native in Swift.
 
 ```bash
 ./build.sh
-open ShakeSight.app
+open GenieLM.app
 ```
 
 A 👁 icon appears in the menu bar.
@@ -52,12 +52,12 @@ A 👁 icon appears in the menu bar.
 ### First-run permissions
 
 macOS prompts for **Screen Recording** the first time it captures
-(System Settings → Privacy & Security → Screen Recording → enable ShakeSight,
+(System Settings → Privacy & Security → Screen Recording → enable GenieLM,
 then relaunch). Mouse observation needs no special permission.
 
 For live logs during a demo, run the binary directly instead of `open`:
 ```bash
-./ShakeSight.app/Contents/MacOS/ShakeSight
+./GenieLM.app/Contents/MacOS/GenieLM
 ```
 
 ## How it works

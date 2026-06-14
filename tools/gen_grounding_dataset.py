@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate a synthetic UI-grounding SFT dataset for ShakeSight.
+"""Generate a synthetic UI-grounding SFT dataset for GenieLM.
 
 Each row is a chat: system instruction + a user turn listing on-screen elements
 (label + pixel center) and a natural-language instruction, and an assistant turn

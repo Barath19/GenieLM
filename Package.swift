@@ -2,12 +2,12 @@
 import PackageDescription
 
 let package = Package(
-    name: "ShakeSight",
+    name: "GenieLM",
     platforms: [.macOS(.v14)],
     targets: [
         .executableTarget(
-            name: "ShakeSight",
-            path: "Sources/ShakeSight"
+            name: "GenieLM",
+            path: "Sources/GenieLM"
         )
     ]
 )

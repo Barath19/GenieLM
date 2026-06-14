@@ -11,7 +11,7 @@ final class KeyablePanel: NSPanel {
 /// Observable state shared with the SwiftUI bubble.
 @MainActor
 final class BubbleModel: ObservableObject {
-    @Published var title = "👁 ShakeSight"
+    @Published var title = "👁 GenieLM"
     @Published var transcript = ""
     @Published var inputText = ""
     @Published var inputEnabled = false

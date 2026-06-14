@@ -88,12 +88,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 guard sessionActive else { return }
                 guard choice.action != "none", let id = choice.id, id >= 0, id < els.count else {
                     transcript += "\n\nNo matching element in \(app)."
-                    overlay.render(transcript: transcript); overlay.setStatus("SHAKESIGHT")
+                    overlay.render(transcript: transcript); overlay.setStatus("GENIELM")
                     overlay.setInputEnabled(true); RetroSound.error(); return
                 }
                 let el = els[id]
                 transcript += "\n\n→ \(choice.action) [\(id)] \"\(el.label)\""
-                overlay.render(transcript: transcript); overlay.setStatus("SHAKESIGHT")
+                overlay.render(transcript: transcript); overlay.setStatus("GENIELM")
                 let cg = el.center
                 ghost.glide(to: ScreenAction.cgToAppKit(cg)) {
                     ScreenAction.click(atCG: cg)
@@ -147,11 +147,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
                 if choice.done {
                     transcript += "\n\nDONE: \(choice.reason ?? "goal reached")"
-                    overlay.render(transcript: transcript); overlay.setStatus("SHAKESIGHT"); RetroSound.answer(); return
+                    overlay.render(transcript: transcript); overlay.setStatus("GENIELM"); RetroSound.answer(); return
                 }
                 guard let id = choice.id, id >= 0, id < els.count else {
                     transcript += "\n\nSTUCK: \(choice.reason ?? "no matching element in \(app)")"
-                    overlay.render(transcript: transcript); overlay.setStatus("SHAKESIGHT"); RetroSound.error(); return
+                    overlay.render(transcript: transcript); overlay.setStatus("GENIELM"); RetroSound.error(); return
                 }
 
                 let el = els[id]
@@ -173,7 +173,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 try? await Task.sleep(nanoseconds: 1_200_000_000)   // let the UI settle
             }
             transcript += "\n\n(step limit reached)"
-            overlay.render(transcript: transcript); overlay.setStatus("SHAKESIGHT")
+            overlay.render(transcript: transcript); overlay.setStatus("GENIELM")
         }
     }
 
@@ -185,7 +185,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(NSMenuItem(title: "Snip: hold ⌘ + drag", action: nil, keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Toggle ghost cursor", action: #selector(toggleGhost), keyEquivalent: "g"))
         menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "Quit ShakeSight", action: #selector(quit), keyEquivalent: "q"))
+        menu.addItem(NSMenuItem(title: "Quit GenieLM", action: #selector(quit), keyEquivalent: "q"))
         menu.items.forEach { $0.target = self }
         item.menu = menu
         statusItem = item
@@ -218,7 +218,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 print("[snip] region=\(String(describing: region)) png=\(png.count)B image=\(img != nil) size=\(img?.size ?? .zero)")
                 pendingImageB64 = png.base64EncodedString()
                 overlay.setImage(region == nil ? nil : img)   // only show the snip, not full screen
-                overlay.setStatus("SHAKESIGHT")
+                overlay.setStatus("GENIELM")
                 overlay.setInputEnabled(true)   // just the pill until they ask
             } catch {
                 guard sessionActive else { return }
@@ -308,7 +308,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 if choice.action != "none", let id = choice.id, id >= 0, id < els.count {
                     let el = els[id]
                     transcript += "\n\n→ \(choice.action) [\(id)] \"\(el.label)\""
-                    overlay.render(transcript: transcript); overlay.setStatus("SHAKESIGHT")
+                    overlay.render(transcript: transcript); overlay.setStatus("GENIELM")
                     let cg = el.center, act = choice.action, text = choice.text
                     ghost.glide(to: ScreenAction.cgToAppKit(cg)) {
                         ScreenAction.click(atCG: cg)
@@ -358,7 +358,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 history.append(OllamaClient.ChatMessage(role: "assistant", content: answer, images: nil))
                 transcript += "\n\n\(answer)"
                 overlay.render(transcript: transcript)
-                overlay.setStatus("SHAKESIGHT")
+                overlay.setStatus("GENIELM")
                 RetroSound.answer()
             } catch {
                 guard sessionActive else { return }
