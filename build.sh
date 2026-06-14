@@ -44,6 +44,10 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
     <string>Fonts</string>
     <key>NSScreenCaptureUsageDescription</key>
     <string>GenieLM captures your screen to analyze it when you shake the mouse.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>GenieLM listens to your voice command when you tap the mic.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>GenieLM transcribes your spoken command to act on screen.</string>
 </dict>
 </plist>
 PLIST

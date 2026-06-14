@@ -13,9 +13,9 @@ Hackathon project (Pioneer / Fastino Labs). Built native in Swift.
   chat bubble pops up at your cursor. Ask anything; follow-ups keep context.
 - **⌘ + drag to snip** - hold ⌘ and drag a rectangle anywhere → that region is
   captured, shown as a thumbnail in the chat, and sent to the model.
-- **Ghost cursor** - type `tic tac toe` in the chat to play tic-tac-toe against
-  a "ghost" pointer: you draw your X, Gemma *looks at the board* and the ghost
-  hand-draws its O. (Menu also has a standalone trailing ghost cursor.)
+- **Genie cursor** - type `tic tac toe` in the chat to play tic-tac-toe against
+  a "genie" pointer: you draw your X, Gemma *looks at the board* and the genie
+  hand-draws its O. (Menu also has a standalone trailing genie cursor.)
 - **8-bit theme** - neon-green CRT styling, the bundled *Press Start 2P* arcade
   font, and synthesized chiptune blips on every action.
 
@@ -27,7 +27,7 @@ Hackathon project (Pioneer / Fastino Labs). Built native in Swift.
 | Snip a region | **Hold ⌘ and drag** a rectangle, then release |
 | Ask / follow up | Type in the `>` field, press **Return** |
 | Play tic-tac-toe | Type `tic tac toe` in the chat |
-| Toggle ghost cursor | Menu → *Toggle ghost cursor* (⌘G) |
+| Toggle genie cursor | Menu → *Toggle genie cursor* (⌘G) |
 | Close | **Shake** again, or **Esc** |
 
 ## Architecture
@@ -42,7 +42,7 @@ flowchart TD
         ROUTE{"auto-intent:<br/>question or action?"}
         CAP["ScreenCaptureKit<br/>screenshot / region"]
         AX["Accessibility tree → text<br/>(AXUIElement)"]
-        ACT["CGEvent click / type<br/>(ghost cursor)"]
+        ACT["CGEvent click / type<br/>(genie cursor)"]
         BUBBLE["8-bit chat bubble<br/>(SwiftUI)"]
     end
 
@@ -101,7 +101,7 @@ For live logs during a demo, run the binary directly instead of `open`:
 | Screen grab | `ScreenCapture.swift` | ScreenCaptureKit full-display capture, then crops per-`NSScreen` (multi-monitor safe) |
 | Vision model | `OllamaClient.swift` | POSTs base64 PNG to `127.0.0.1:11434/api/chat`, multi-turn |
 | Chat bubble | `OverlayController.swift` | SwiftUI in a non-activating `NSPanel`; follows the cursor, bouncy spring, sizes to content |
-| Ghost cursor | `GhostCursor.swift` | Click-through neon arrow that follows / glides / traces strokes |
+| Genie cursor | `GenieCursor.swift` | Click-through neon arrow that follows / glides / traces strokes |
 | Tic-tac-toe | `DrawGame.swift` | Freehand board; Gemma reads a screenshot and returns the move as `x,y` coords |
 | Sound | `RetroSound.swift` | Square-wave chiptune blips synthesized in memory |
 | Wiring | `main.swift` | Menu-bar agent (`LSUIElement`), triggers, capture → chat |

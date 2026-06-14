@@ -23,7 +23,7 @@ private let boardImage: NSImage? = {
 }()
 
 /// Freehand tic-tac-toe canvas. You ink your X with the mouse and press Space;
-/// the ghost (Gemma) reads the drawing and inks an O.
+/// the genie (Gemma) reads the drawing and inks an O.
 final class DrawCanvasView: NSView {
     var onCommit: (() -> Void)?
     var onClose: (() -> Void)?
@@ -32,7 +32,7 @@ final class DrawCanvasView: NSView {
     enum Mode { case draw, waiting, over }
     var mode: Mode = .draw
     private var commitTimer: Timer?
-    private let autoCommitDelay = 0.9   // pause after drawing → ghost responds
+    private let autoCommitDelay = 0.9   // pause after drawing → genie responds
 
     private(set) var strokes: [[NSPoint]] = []     // all committed ink (display)
     private var current: [NSPoint] = []            // stroke in progress
@@ -256,13 +256,13 @@ final class DrawCanvasView: NSView {
     }
 }
 
-/// Hosts the drawing canvas and drives the ghost + Gemma for O's moves.
+/// Hosts the drawing canvas and drives the genie + Gemma for O's moves.
 @MainActor
 final class DrawGameController: NSObject {
     private(set) var isActive = false
     var onClose: (() -> Void)?
 
-    private let ghost: GhostCursor
+    private let genie: GenieCursor
     private let ollama = OllamaClient()
     private var panel: KeyablePanel?
     private var canvas: DrawCanvasView?
@@ -270,7 +270,7 @@ final class DrawGameController: NSObject {
 
     private static let lines = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]]
 
-    init(ghost: GhostCursor) { self.ghost = ghost }
+    init(genie: GenieCursor) { self.genie = genie }
 
     func start() {
         ensurePanel()
@@ -280,13 +280,13 @@ final class DrawGameController: NSObject {
         NSApp.activate(ignoringOtherApps: true)
         panel?.makeKeyAndOrderFront(nil)
         if let canvas { panel?.makeFirstResponder(canvas) }
-        ghost.park()
+        genie.park()
     }
 
     func close() {
         guard isActive else { return }
         isActive = false
-        ghost.hide()
+        genie.hide()
         panel?.orderOut(nil)
         onClose?()
     }
@@ -303,17 +303,17 @@ final class DrawGameController: NSObject {
 
         busy = true
         canvas.mode = .waiting
-        canvas.status = "GHOST LOOKING..."; canvas.needsDisplay = true
+        canvas.status = "GENIE LOOKING..."; canvas.needsDisplay = true
         Task { @MainActor in
-            let cell = await ghostMove(canvas)
+            let cell = await genieMove(canvas)
             let startView = canvas.beginO(cell: cell)
             let startScreen = panel?.convertPoint(toScreen: startView) ?? startView
-            ghost.glide(to: startScreen) { [weak self] in
+            genie.glide(to: startScreen) { [weak self] in
                 guard let self, let canvas = self.canvas else { return }
                 canvas.animateO(cell: cell, onPoint: { [weak self] viewPoint in
                     guard let self else { return }
                     let sp = self.panel?.convertPoint(toScreen: viewPoint) ?? viewPoint
-                    self.ghost.snap(to: sp)   // pointer traces the stroke
+                    self.genie.snap(to: sp)   // pointer traces the stroke
                 }, completion: {
                     RetroSound.answer()
                     self.busy = false
@@ -328,14 +328,14 @@ final class DrawGameController: NSObject {
 
     // MARK: AI (Gemma vision + fallback)
 
-    private func ghostMove(_ canvas: DrawCanvasView) async -> Int {
+    private func genieMove(_ canvas: DrawCanvasView) async -> Int {
         if let idx = await visionMove(canvas) { return idx }
         return (0..<9).first { !canvas.xCells.contains($0) && !canvas.oCells.contains($0) } ?? 0
     }
 
     private func visionMove(_ canvas: DrawCanvasView) async -> Int? {
         guard let panel else { return nil }
-        ghost.hide()
+        genie.hide()
         try? await Task.sleep(nanoseconds: 150_000_000)
         guard let png = try? await ScreenCapture.capture(globalRect: panel.frame) else { return nil }
         let prompt = """
@@ -346,11 +346,11 @@ final class DrawGameController: NSObject {
         """
         let msg = OllamaClient.ChatMessage(role: "user", content: prompt, images: [png.base64EncodedString()])
         guard let reply = try? await ollama.chat(messages: [msg]) else {
-            print("[ghost] no reply from Gemma"); return nil
+            print("[genie] no reply from Gemma"); return nil
         }
         let W = Double(panel.frame.width), H = Double(panel.frame.height)
-        print("[ghost] X cells=\(canvas.xCells.sorted()) O cells=\(canvas.oCells.sorted())")
-        print("[ghost] gemma raw reply: \(reply.replacingOccurrences(of: "\n", with: " "))")
+        print("[genie] X cells=\(canvas.xCells.sorted()) O cells=\(canvas.oCells.sorted())")
+        print("[genie] gemma raw reply: \(reply.replacingOccurrences(of: "\n", with: " "))")
 
         let nums = reply.components(separatedBy: CharacterSet(charactersIn: "0123456789.").inverted)
             .compactMap { Double($0) }
@@ -361,19 +361,19 @@ final class DrawGameController: NSObject {
             let col = min(2, max(0, Int(x * 3)))
             let row = min(2, max(0, Int(y * 3)))
             let cell = row * 3 + col
-            print("[ghost] coords x=\(String(format: "%.2f", x)) y=\(String(format: "%.2f", y)) → cell \(cell)")
+            print("[genie] coords x=\(String(format: "%.2f", x)) y=\(String(format: "%.2f", y)) → cell \(cell)")
             if !canvas.xCells.contains(cell), !canvas.oCells.contains(cell) { return cell }
-            print("[ghost] coord cell occupied → fallback")
+            print("[genie] coord cell occupied → fallback")
         } else if let d = nums.first.flatMap({ Int($0) }), (0...8).contains(d),
                   !canvas.xCells.contains(d), !canvas.oCells.contains(d) {
-            print("[ghost] single index \(d)")
+            print("[genie] single index \(d)")
             return d
         }
-        print("[ghost] no legal move parsed → minimax fallback")
+        print("[genie] no legal move parsed → minimax fallback")
         return nil
     }
 
-    // MARK: Win logic (X = player ink cells, O = ghost cells)
+    // MARK: Win logic (X = player ink cells, O = genie cells)
 
     private func winner(_ c: DrawCanvasView) -> Character? {
         for l in Self.lines {
@@ -387,7 +387,7 @@ final class DrawGameController: NSObject {
     private func end(_ c: DrawCanvasView, _ w: Character?) {
         busy = false
         c.mode = .over
-        c.status = w == "X" ? "YOU WIN! CLICK TO REPLAY" : w == "O" ? "GHOST WINS · CLICK TO REPLAY" : "DRAW · CLICK TO REPLAY"
+        c.status = w == "X" ? "YOU WIN! CLICK TO REPLAY" : w == "O" ? "GENIE WINS · CLICK TO REPLAY" : "DRAW · CLICK TO REPLAY"
         w == "X" ? RetroSound.answer() : RetroSound.error()
         c.needsDisplay = true
     }

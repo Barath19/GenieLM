@@ -1,10 +1,10 @@
 import AppKit
 
-/// A second, click-through "ghost" pointer drawn as an 8-bit neon arrow.
+/// A second, click-through "genie" pointer drawn as an 8-bit neon arrow.
 /// Two modes: follow the real cursor (trailing-lag), or glide to a fixed point
 /// (used as the tic-tac-toe opponent's "hand").
 @MainActor
-final class GhostCursor {
+final class GenieCursor {
     private(set) var visible = false
     private var window: NSWindow?
     private var timer: Timer?
@@ -17,7 +17,7 @@ final class GhostCursor {
 
     func toggle() { visible ? hide() : show() }
 
-    /// Show following the real cursor (trailing ghost).
+    /// Show following the real cursor (trailing genie).
     func show() {
         followMouse = true
         guard !visible else { return }
@@ -104,13 +104,13 @@ final class GhostCursor {
         w.ignoresMouseEvents = true
         w.hasShadow = false
         w.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
-        w.contentView = GhostPointerView(frame: NSRect(origin: .zero, size: size))
+        w.contentView = GeniePointerView(frame: NSRect(origin: .zero, size: size))
         window = w
     }
 }
 
 /// Draws a blocky neon arrow pointer (tip at top-left), with a dark outline.
-final class GhostPointerView: NSView {
+final class GeniePointerView: NSView {
     override var isFlipped: Bool { true }
 
     override func draw(_ rect: NSRect) {

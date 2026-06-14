@@ -100,7 +100,7 @@ enum ScreenAction {
         }
     }
 
-    /// CG top-left global → AppKit bottom-left global (for the ghost cursor).
+    /// CG top-left global → AppKit bottom-left global (for the genie cursor).
     static func cgToAppKit(_ p: CGPoint) -> NSPoint {
         let primary = NSScreen.screens.first { $0.frame.origin == .zero } ?? NSScreen.main ?? NSScreen.screens[0]
         return NSPoint(x: p.x, y: primary.frame.height - p.y)

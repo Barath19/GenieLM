@@ -21,11 +21,12 @@ never invent UI that isn't visible.
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let detector = ShakeDetector()
     private let overlay = OverlayController()
-    private let ghost = GhostCursor()
+    private let genie = GenieCursor()
     private let snipper = CmdDragSnipper()
-    private lazy var game = DrawGameController(ghost: ghost)
+    private lazy var game = DrawGameController(genie: genie)
     private let ollama = OllamaClient()
     private let pioneer = PioneerClient()
+    private let voice = VoiceController()
     private var statusItem: NSStatusItem?
     private var busy = false
     private var sessionActive = false
@@ -41,9 +42,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         detector.onShake = { [weak self] in self?.toggleSession() }
         overlay.onSubmit = { [weak self] question in self?.ask(question) }
         overlay.onClose = { [weak self] in self?.closeSession() }
+        overlay.onMic = { [weak self] in self?.toggleVoice() }
         snipper.onSnip = { [weak self] rect in self?.startNewSession(region: rect) }
         detector.start()
         snipper.start()
+    }
+
+    /// Tap the mic in the chat: transcribe speech, then route it like a typed
+    /// message (question → Gemma, command → grounder).
+    private func toggleVoice() {
+        if voice.listening { voice.stop(); return }
+        voice.requestAuth { [weak self] ok in
+            MainActor.assumeIsolated {          // delivered on the main queue
+                guard let self else { return }
+                guard ok else {
+                    self.overlay.render(transcript: "Grant Microphone + Speech Recognition\n(System Settings → Privacy), then relaunch.")
+                    return
+                }
+                self.overlay.clearInput()
+                self.overlay.setListening(true)
+                self.voice.onPartial = { [weak self] t in
+                    MainActor.assumeIsolated { self?.overlay.setInputText(t) }
+                }
+                self.voice.onFinal = { [weak self] t in
+                    MainActor.assumeIsolated {
+                        guard let self else { return }
+                        self.overlay.setListening(false)
+                        let q = t.trimmingCharacters(in: .whitespacesAndNewlines)
+                        self.overlay.clearInput()
+                        if !q.isEmpty { self.ask(q) }
+                    }
+                }
+                self.voice.start()
+            }
+        }
     }
 
     /// Shake toggles the chat (or closes the game if it's running).
@@ -55,13 +87,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func closeSession() {
         sessionActive = false   // invalidates any in-flight completion
         busy = false
-        ghost.hide()            // dismiss the ghost cursor with the chat
+        genie.hide()            // dismiss the genie cursor with the chat
         RetroSound.close()
         overlay.hide()
     }
 
     /// "do <instruction>": dump the frontmost app, ask Pioneer which element to
-    /// act on, then the ghost glides there and clicks it.
+    /// act on, then the genie glides there and clicks it.
     private func performAction(_ instruction: String) {
         guard !busy else { return }
         overlay.clearInput()
@@ -95,7 +127,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 transcript += "\n\n→ \(choice.action) [\(id)] \"\(el.label)\""
                 overlay.render(transcript: transcript); overlay.setStatus("GENIELM")
                 let cg = el.center
-                ghost.glide(to: ScreenAction.cgToAppKit(cg)) {
+                genie.glide(to: ScreenAction.cgToAppKit(cg)) {
                     ScreenAction.click(atCG: cg)
                     RetroSound.answer()
                 }
@@ -110,7 +142,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// "auto <goal>": agentic loop — observe (a11y) → decide (Pioneer) → act
-    /// (ghost click/type) → re-observe, until done or a step cap. Abort by
+    /// (genie click/type) → re-observe, until done or a step cap. Abort by
     /// shaking / Esc (clears sessionActive).
     private func automate(_ goal: String) {
         guard !busy else { return }
@@ -163,7 +195,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 let cg = el.center
                 let act = choice.action, text = choice.text
                 await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
-                    ghost.glide(to: ScreenAction.cgToAppKit(cg)) {
+                    genie.glide(to: ScreenAction.cgToAppKit(cg)) {
                         ScreenAction.click(atCG: cg)
                         if act == "type", let t = text { ScreenAction.type(t) }
                         RetroSound.submit()
@@ -183,7 +215,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         menu.addItem(NSMenuItem(title: "Open chat now", action: #selector(openMenu), keyEquivalent: "a"))
         menu.addItem(NSMenuItem(title: "Snip: hold ⌘ + drag", action: nil, keyEquivalent: ""))
-        menu.addItem(NSMenuItem(title: "Toggle ghost cursor", action: #selector(toggleGhost), keyEquivalent: "g"))
+        menu.addItem(NSMenuItem(title: "Toggle genie cursor", action: #selector(toggleGenie), keyEquivalent: "g"))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit GenieLM", action: #selector(quit), keyEquivalent: "q"))
         menu.items.forEach { $0.target = self }
@@ -192,7 +224,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openMenu() { startNewSession() }
-    @objc private func toggleGhost() { ghost.toggle(); RetroSound.submit() }
+    @objc private func toggleGenie() { genie.toggle(); RetroSound.submit() }
     @objc private func quit() { NSApp.terminate(nil) }
 
     /// Shake (or menu): capture the screen silently and open the chat at the
@@ -238,7 +270,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        // Single action: "do <instruction>" → ground via Pioneer → ghost clicks it.
+        // Single action: "do <instruction>" → ground via Pioneer → genie clicks it.
         if qt.lowercased().hasPrefix("do ") {
             performAction(String(qt.dropFirst(3)))
             return
@@ -261,7 +293,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        // Easter-egg command: play tic-tac-toe against the ghost.
+        // Easter-egg command: play tic-tac-toe against the genie.
         if question.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "tic tac toe" {
             overlay.clearInput()
             sessionActive = false
@@ -310,7 +342,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     transcript += "\n\n→ \(choice.action) [\(id)] \"\(el.label)\""
                     overlay.render(transcript: transcript); overlay.setStatus("GENIELM")
                     let cg = el.center, act = choice.action, text = choice.text
-                    ghost.glide(to: ScreenAction.cgToAppKit(cg)) {
+                    genie.glide(to: ScreenAction.cgToAppKit(cg)) {
                         ScreenAction.click(atCG: cg)
                         if act == "type", let t = text { ScreenAction.type(t) }
                         RetroSound.answer()

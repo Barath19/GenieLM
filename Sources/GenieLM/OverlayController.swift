@@ -1,11 +1,20 @@
 import AppKit
 import SwiftUI
 
-/// A non-activating panel that can still accept keyboard focus. Esc dismisses it.
+/// A non-activating panel that can still accept keyboard focus. Esc dismisses it;
+/// ⌘M toggles voice input (the bubble follows the cursor, so you can't click).
 final class KeyablePanel: NSPanel {
     var onEscape: (() -> Void)?
+    var onMicKey: (() -> Void)?
     override var canBecomeKey: Bool { true }
     override func cancelOperation(_ sender: Any?) { onEscape?() }
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if event.modifierFlags.contains(.command),
+           event.charactersIgnoringModifiers?.lowercased() == "m" {
+            onMicKey?(); return true
+        }
+        return super.performKeyEquivalent(with: event)
+    }
 }
 
 /// Observable state shared with the SwiftUI bubble.
@@ -18,9 +27,11 @@ final class BubbleModel: ObservableObject {
     @Published var shown = false
     @Published var focusTick = 0   // bump to (re)request keyboard focus
     @Published var image: NSImage?   // captured snip shown atop the chat
+    @Published var listening = false  // voice input active
 
     var onSubmit: ((String) -> Void)?
     var onClose: (() -> Void)?
+    var onMic: (() -> Void)?
 
     func submit() {
         let t = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -67,13 +78,18 @@ struct ChatBubbleView: View {
             HStack(spacing: 6) {
                 Text(">").foregroundColor(Retro.neon)
                 TextField("", text: $model.inputText,
-                          prompt: Text(model.inputEnabled ? "ASK ABOUT YOUR SCREEN" : model.title.uppercased())
+                          prompt: Text(model.listening ? "LISTENING..." : (model.inputEnabled ? "ASK ABOUT YOUR SCREEN" : model.title.uppercased()))
                             .foregroundColor(Retro.dim))
                     .textFieldStyle(.plain)
                     .foregroundColor(Retro.neon)
                     .focused($focused)
                     .disabled(!model.inputEnabled)
                     .onSubmit { model.submit() }
+                Button(action: { model.onMic?() }) {
+                    Text(model.listening ? "[REC]" : "[MIC]")
+                        .foregroundColor(model.listening ? Color.red : Retro.dim)
+                }
+                .buttonStyle(.plain)
             }
             .font(Retro.font(9))
             .padding(.horizontal, 10)
@@ -125,6 +141,7 @@ struct ChatBubbleView: View {
 final class OverlayController: NSObject {
     var onSubmit: ((String) -> Void)?
     var onClose: (() -> Void)?
+    var onMic: (() -> Void)?
 
     private let model = BubbleModel()
     private var panel: KeyablePanel?
@@ -148,6 +165,8 @@ final class OverlayController: NSObject {
     }
 
     func setStatus(_ status: String) { model.title = status; forceRender() }
+    func setInputText(_ s: String) { model.inputText = s; forceRender() }
+    func setListening(_ b: Bool) { model.listening = b; forceRender() }
     func render(transcript: String) { model.transcript = transcript; forceRender() }
     func setImage(_ image: NSImage?) {
         model.image = image
@@ -200,6 +219,7 @@ final class OverlayController: NSObject {
 
         model.onSubmit = { [weak self] text in self?.onSubmit?(text) }
         model.onClose = { [weak self] in self?.onClose?() }
+        model.onMic = { [weak self] in self?.onMic?() }
 
         let size = NSSize(width: 356, height: 72)   // initial; resized to fit content
         let p = KeyablePanel(
@@ -216,6 +236,7 @@ final class OverlayController: NSObject {
         p.hidesOnDeactivate = false
         p.isMovableByWindowBackground = true
         p.onEscape = { [weak self] in self?.onClose?() }
+        p.onMicKey = { [weak self] in self?.onMic?() }
 
         let host = NSHostingView(rootView: ChatBubbleView(model: model))
         host.sizingOptions = [.intrinsicContentSize]   // size to SwiftUI content, not the window
