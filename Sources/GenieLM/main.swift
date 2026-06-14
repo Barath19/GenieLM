@@ -23,7 +23,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let overlay = OverlayController()
     private let genie = GenieCursor()
     private let snipper = CmdDragSnipper()
-    private lazy var game = DrawGameController(genie: genie)
+    private lazy var game = TicTacToeController(genie: genie)
     private let ollama = OllamaClient()
     private let pioneer = PioneerClient()
     private let voice = VoiceController()
