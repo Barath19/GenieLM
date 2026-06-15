@@ -4,7 +4,9 @@ import AppKit
 /// list of screen elements. Key/model come from the environment.
 struct PioneerClient {
     var base = URL(string: ProcessInfo.processInfo.environment["PIONEER_API_URL"] ?? "https://api.pioneer.ai")!
-    var model = ProcessInfo.processInfo.environment["PIONEER_MODEL"] ?? "claude-haiku-4-5"
+    var model = ProcessInfo.processInfo.environment["PIONEER_MODEL"]
+        ?? ProcessInfo.processInfo.environment["MODEL"]
+        ?? "claude-haiku-4-5"
     var apiKey: String? { ProcessInfo.processInfo.environment["PIONEER_API_KEY"] }
 
     struct Choice { let action: String; let id: Int?; let text: String?; let done: Bool; let reason: String? }
@@ -64,25 +66,16 @@ struct PioneerClient {
     }
 
     /// Cloud (Pioneer) first. Offline (unreachable / keyless / GENIE_OFFLINE=1)
-    /// → the downloaded fine-tuned model in Ollama (LOCAL_MODEL, default
-    /// "genie-grounder-v4"); base gemma3:4b only as a last resort if it's
-    /// not installed yet.
+    /// → the local llama.cpp server (gemma3-4b text grounding).
     private func rawDecision(system: String, user: String) async throws -> String {
         let forceLocal = ProcessInfo.processInfo.environment["GENIE_OFFLINE"] == "1"
         if !forceLocal, let apiKey {
             do { return try await pioneerChat(system: system, user: user, apiKey: apiKey) }
-            catch { print("[agent] Pioneer unreachable → local fine-tuned model") }
+            catch { print("[agent] Pioneer unreachable → local llama.cpp") }
         }
-        let msgs = [OllamaClient.ChatMessage(role: "system", content: system, images: nil),
-                    OllamaClient.ChatMessage(role: "user", content: user, images: nil)]
-        let localModel = ProcessInfo.processInfo.environment["LOCAL_MODEL"] ?? "genie-grounder-v4"
-        var client = OllamaClient(); client.model = localModel
-        do { return try await client.chat(messages: msgs) }
-        catch {
-            print("[agent] \(localModel) unavailable → base gemma3:4b")
-            var fallback = OllamaClient(); fallback.model = "gemma3:4b"
-            return try await fallback.chat(messages: msgs)
-        }
+        let msgs = [LlamaClient.ChatMessage(role: "system", content: system, images: nil),
+                    LlamaClient.ChatMessage(role: "user", content: user, images: nil)]
+        return try await LlamaClient().chat(messages: msgs)
     }
 
     private func pioneerChat(system: String, user: String, apiKey: String) async throws -> String {

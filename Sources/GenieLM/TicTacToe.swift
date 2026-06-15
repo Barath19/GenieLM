@@ -101,7 +101,7 @@ final class TicTacToeController: NSObject {
 
     let model = TicTacToeModel()
     private let genie: GenieCursor
-    private let ollama = OllamaClient()
+    private let ollama = LlamaClient()
     private var panel: KeyablePanel?
     private var animating = false
 
@@ -164,7 +164,7 @@ final class TicTacToeController: NSObject {
         middle 3 4 5, bottom 6 7 8. You play O against X. Reply with ONLY the \
         single digit (0-8) of the best EMPTY cell for O.
         """
-        let msg = OllamaClient.ChatMessage(role: "user", content: prompt, images: [png.base64EncodedString()])
+        let msg = LlamaClient.ChatMessage(role: "user", content: prompt, images: [png.base64EncodedString()])
         guard let reply = try? await ollama.chat(messages: [msg]) else { return nil }
         for ch in reply where ch.isNumber {
             if let d = ch.wholeNumberValue, (0...8).contains(d), model.board[d] == nil { return d }

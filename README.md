@@ -3,7 +3,7 @@
 A native macOS menu-bar agent that lets a **local Gemma vision model** see your
 screen. Shake your mouse (or ⌘-drag a region) and a retro 8-bit chat bubble
 floats next to your cursor so you can ask about whatever's on screen. No cloud,
-no API keys - runs fully on-device via Ollama.
+no API keys - runs fully on-device via llama.cpp.
 
 Hackathon project (Pioneer / Fastino Labs). Built native in Swift.
 
@@ -47,7 +47,7 @@ flowchart TD
     end
 
     ROUTE -->|question| CAP
-    CAP --> GEMMA["Ollama · gemma3:4b<br/>LOCAL vision"]
+    CAP --> GEMMA["llama.cpp · gemma-3-4b<br/>LOCAL vision"]
     GEMMA --> BUBBLE
 
     ROUTE -->|action| AX
@@ -65,12 +65,16 @@ flowchart TD
 ## Requirements
 
 - macOS 14+ (built/tested on macOS 27, Apple Silicon)
-- [Ollama](https://ollama.com) with a vision model:
+- [llama.cpp](https://github.com/ggml-org/llama.cpp) (`llama-server`) serving a Gemma 3 GGUF + mmproj (vision):
   ```bash
-  brew install ollama
-  ollama serve              # or: brew services start ollama
-  ollama pull gemma3:4b     # 4B/12B/27B are multimodal; 1B is text-only
+  brew install llama.cpp
+  hf download ggml-org/gemma-3-4b-it-GGUF \
+      gemma-3-4b-it-Q4_K_M.gguf mmproj-model-f16.gguf --local-dir models/gemma3
+  llama-server -m models/gemma3/gemma-3-4b-it-Q4_K_M.gguf \
+      --mmproj models/gemma3/mmproj-model-f16.gguf --port 8080 -ngl 99 --jinja
   ```
+  (Override the URL with `LLAMA_URL`. Online action-grounding uses Pioneer; set
+  `PIONEER_API_KEY` + `MODEL`/`PIONEER_MODEL`, else it falls back to local Gemma.)
 
 ## Build & run
 
@@ -99,7 +103,7 @@ For live logs during a demo, run the binary directly instead of `open`:
 | Shake gesture | `ShakeDetector.swift` | Global `NSEvent` monitor; rapid horizontal direction reversals (ignored while ⌘ is held) |
 | ⌘-drag snip | `CmdDragSnipper.swift` | Passive global mouse monitors + a click-through overlay that draws the selection box |
 | Screen grab | `ScreenCapture.swift` | ScreenCaptureKit full-display capture, then crops per-`NSScreen` (multi-monitor safe) |
-| Vision model | `OllamaClient.swift` | POSTs base64 PNG to `127.0.0.1:11434/api/chat`, multi-turn |
+| Vision model | `LlamaClient.swift` | OpenAI-compatible calls to local `llama-server` (vision via mmproj) |
 | Chat bubble | `OverlayController.swift` | SwiftUI in a non-activating `NSPanel`; follows the cursor, bouncy spring, sizes to content |
 | Genie cursor | `GenieCursor.swift` | Click-through neon arrow that follows / glides / traces strokes |
 | Tic-tac-toe | `DrawGame.swift` | Freehand board; Gemma reads a screenshot and returns the move as `x,y` coords |
@@ -112,4 +116,4 @@ For live logs during a demo, run the binary directly instead of `open`:
   `windowSeconds`, `minSpeed`, `cooldown`.
 - **Board image** - drop any grid image at `Resources/board.png` (it's recolored
   to neon on load) and rebuild.
-- **Model** - change `model` in `OllamaClient.swift` to any Ollama vision model.
+- **Model** - swap the GGUF passed to `llama-server` (any multimodal model).
