@@ -19,3 +19,6 @@ hf_dataset/
 
 # Downloaded model weights (large, fetched from Pioneer)
 models/
+
+# distributable
+*.dmg
