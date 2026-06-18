@@ -24,7 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let genie = GenieCursor()
     private let snipper = CmdDragSnipper()
     private lazy var game = TicTacToeController(genie: genie)
-    private let ollama = OllamaClient()
+    private let ollama = LlamaClient()
     private let pioneer = PioneerClient()
     private let voice = VoiceController()
     private var statusItem: NSStatusItem?
@@ -33,11 +33,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // Conversation state for the current screenshot.
     private var pendingImageB64: String?
-    private var history: [OllamaClient.ChatMessage] = []
+    private var history: [LlamaClient.ChatMessage] = []
     private var transcript = ""
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         registerBundledFonts()
+        LocalEngine.shared.onStatus = { print("[engine] \($0)") }
+        LocalEngine.shared.start()   // download model on first run + launch local llama.cpp
         setupStatusItem()
         detector.onShake = { [weak self] in self?.toggleSession() }
         overlay.onSubmit = { [weak self] question in self?.ask(question) }
@@ -46,6 +48,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         snipper.onSnip = { [weak self] rect in self?.startNewSession(region: rect) }
         detector.start()
         snipper.start()
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        LocalEngine.shared.stop()   // stop the managed llama.cpp server
     }
 
     /// Tap the mic in the chat: transcribe speech, then route it like a typed
@@ -382,10 +388,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         RetroSound.submit()
 
         if history.isEmpty {
-            history.append(OllamaClient.ChatMessage(role: "system", content: systemPrompt, images: nil))
-            history.append(OllamaClient.ChatMessage(role: "user", content: question, images: pendingImageB64.map { [$0] }))
+            history.append(LlamaClient.ChatMessage(role: "system", content: systemPrompt, images: nil))
+            history.append(LlamaClient.ChatMessage(role: "user", content: question, images: pendingImageB64.map { [$0] }))
         } else {
-            history.append(OllamaClient.ChatMessage(role: "user", content: question, images: nil))
+            history.append(LlamaClient.ChatMessage(role: "user", content: question, images: nil))
         }
 
         print("[chat] asking: \(question) (history=\(history.count))")
@@ -395,7 +401,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 let answer = try await ollama.chat(messages: history)
                 guard sessionActive else { return }
                 print("[chat] answer: \(answer.prefix(120))")
-                history.append(OllamaClient.ChatMessage(role: "assistant", content: answer, images: nil))
+                history.append(LlamaClient.ChatMessage(role: "assistant", content: answer, images: nil))
                 transcript += "\n\n\(answer)"
                 overlay.render(transcript: transcript)
                 overlay.setStatus("GENIELM")

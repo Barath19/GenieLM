@@ -63,26 +63,18 @@ struct PioneerClient {
                       reason: json?["reason"] as? String)
     }
 
-    /// Cloud (Pioneer) first. Offline (unreachable / keyless / GENIE_OFFLINE=1)
-    /// → the downloaded fine-tuned model in Ollama (LOCAL_MODEL, default
-    /// "genie-grounder-v4"); base gemma3:4b only as a last resort if it's
-    /// not installed yet.
+    /// Default = local (the bundled llama.cpp server) so shipped builds need no
+    /// key. If PIONEER_API_KEY is set (and not GENIE_OFFLINE=1), try Pioneer
+    /// first for higher-quality grounding, falling back to local on failure.
     private func rawDecision(system: String, user: String) async throws -> String {
         let forceLocal = ProcessInfo.processInfo.environment["GENIE_OFFLINE"] == "1"
         if !forceLocal, let apiKey {
             do { return try await pioneerChat(system: system, user: user, apiKey: apiKey) }
-            catch { print("[agent] Pioneer unreachable → local fine-tuned model") }
+            catch { print("[agent] Pioneer unreachable → local llama.cpp") }
         }
-        let msgs = [OllamaClient.ChatMessage(role: "system", content: system, images: nil),
-                    OllamaClient.ChatMessage(role: "user", content: user, images: nil)]
-        let localModel = ProcessInfo.processInfo.environment["LOCAL_MODEL"] ?? "genie-grounder-v4"
-        var client = OllamaClient(); client.model = localModel
-        do { return try await client.chat(messages: msgs) }
-        catch {
-            print("[agent] \(localModel) unavailable → base gemma3:4b")
-            var fallback = OllamaClient(); fallback.model = "gemma3:4b"
-            return try await fallback.chat(messages: msgs)
-        }
+        let msgs = [LlamaClient.ChatMessage(role: "system", content: system, images: nil),
+                    LlamaClient.ChatMessage(role: "user", content: user, images: nil)]
+        return try await LlamaClient().chat(messages: msgs)
     }
 
     private func pioneerChat(system: String, user: String, apiKey: String) async throws -> String {
@@ -95,7 +87,7 @@ struct PioneerClient {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
-        req.timeoutInterval = 30   // fail fast so offline falls back quickly
+        req.timeoutInterval = 90   // allow for first-call GPU cold-start on Pioneer
 
         let (data, resp) = try await URLSession.shared.data(for: req)
         guard let http = resp as? HTTPURLResponse, http.statusCode == 200 else {
